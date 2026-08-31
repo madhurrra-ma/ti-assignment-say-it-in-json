@@ -280,3 +280,399 @@ The repository evidence is strongest on the concrete behavior of the starter tre
 - treat everything else as a design decision that must be made and documented before any migration logic is trusted.
 
 That is the correct boundary if the goal is “proof before rollout.”
+
+
+## User Prompt
+
+We are now making the final semantic decisions before designing the JSON schema.
+
+Do NOT modify any files.
+
+Using ONLY:
+- assignment.md
+- briefs/platform-lead-brief.md
+- briefs/format-reference.md
+- starter/README.md
+- starter/configs/**/*.pfcfg
+
+review the following proposed legacy evaluation model:
+
+1. Start with an empty configuration state.
+2. Process the entry file as an ordered stream.
+3. Evaluate @ifdef/@ifndef using the concrete environment while processing the stream.
+4. Process active @include/@include_once directives recursively at their position in the stream.
+5. Merge assignments in encounter order; later assignments override earlier assignments.
+6. After the complete active include/assignment stream has been merged, resolve interpolation recursively:
+   - ${VAR}
+   - ${VAR:-default}
+   - ${VAR:+alternate}
+   - $(section.key)
+7. Allow forward references because the starter fixtures require references to values that may be defined later in the merged configuration.
+8. Detect circular config references and fail rather than partially resolving them.
+9. Apply a finite expansion limit to protect against pathological input.
+10. Define effective settings as the final resolved section/key/value map under the concrete environment.
+
+For EACH of the 10 points, classify it as:
+- DOCUMENTED
+- FIXTURE-EVIDENCED
+- DESIGN DECISION
+
+For every point that is not fully documented:
+- cite the exact evidence from the repository,
+- explain why the proposed behavior is the safest interpretation,
+- identify what could go wrong if we chose another interpretation.
+
+Then specifically answer:
+
+A. Does the evidence support post-merge interpolation?
+B. Does the evidence require forward references?
+C. Should an explicitly empty environment variable be treated as empty/non-set for @ifdef, @ifndef, :- and :+?
+D. Should missing required environment variables be represented as evaluation errors rather than conversion failures?
+E. Should missing config references be evaluation errors?
+F. Should include cycles be errors?
+G. What should @include_once use as its identity: the resolved file path relative to the repository/filesystem?
+H. What expansion limit would you recommend for this take-home and why?
+
+Finally provide a short section:
+
+"SEMANTICS WE ARE NOW LOCKING"
+
+with the exact rules we can put into DECISIONS.md.
+
+Do not design the JSON schema yet.
+Do not write implementation code.
+Do not modify files.
+
+## Copilot Response
+I’ve narrowed the remaining decisions to the precise semantic choices that the repo actually supports or leaves open, and I’m validating each rule against the docs and the starter fixtures before locking the final interpretation.
+
+## Semantic decisions before schema design
+
+This section applies the repository evidence strictly and separates what is explicit from what is only inferred from the fixtures.
+
+### 1) Start with an empty configuration state
+Classification: DESIGN DECISION
+
+Evidence:
+- Nothing in `assignment.md`, `platform-lead-brief.md`, or `format-reference.md` states the initial config state explicitly.
+- The starter files all behave like a merge starting from empty state and accumulating active directives and assignments, but that is an implementation model, not a documented rule.
+
+Why this is the safest interpretation:
+- It matches the natural “stream-then-merge” semantics implied by includes and overlays.
+- It is the only way to make override order deterministic without assuming a hidden pre-populated base.
+
+What could go wrong with another interpretation:
+- If we assumed a pre-seeded global config, later overrides by entry files could become non-local and impossible to reproduce.
+- Nested includes could silently inherit state from unrelated files, creating wrong effective settings.
+
+---
+
+### 2) Process the entry file as an ordered stream
+Classification: FIXTURE-EVIDENCED
+
+Evidence:
+- The reference requires include directives before sections and describes includes as merging into the current config tree: `format-reference.md`.
+- The actual entry files show ordered accumulation: `pipeline.pfcfg`, `pipeline.pfcfg`, and `pipeline.pfcfg` all build effective settings by reading includes in order and then local assignments after them.
+
+Why this is the safest interpretation:
+- The fixtures plainly rely on ordering.
+- Later overrides win only because the evaluator sees a sequence of assignments, not a set of unordered keys.
+
+What could go wrong with another interpretation:
+- Reordering the stream could alter build settings such as `parallel`, `requires_approval`, or `on_failure` in the starter examples.
+- A set-based merge would silently change semantics.
+
+---
+
+### 3) Evaluate @ifdef/@ifndef using the concrete environment while processing the stream
+Classification: FIXTURE-EVIDENCED
+
+Evidence:
+- The reference explicitly defines the condition semantics: `format-reference.md`.
+- The sample configs use those conditions to include or exclude blocks and files:
+  - `notifications.pfcfg`
+  - `container-publish.pfcfg`
+  - `pipeline.pfcfg`
+  - `conditional-includes.pfcfg`
+
+Why this is the safest interpretation:
+- It is the only interpretation consistent with conditional includes and conditional assignments being active or skipped at the exact point they appear in the stream.
+- It keeps the parse model deterministic and matches the exact semantics described in the reference.
+
+What could go wrong with another interpretation:
+- If conditionals were evaluated after full-tree merge, then conditional include selection and key activation could drift from the legacy stream semantics.
+- That would especially affect the branch-selection files under `edge-cases`.
+
+---
+
+### 4) Process active @include/@include_once directives recursively at their position in the stream
+Classification: FIXTURE-EVIDENCED
+
+Evidence:
+- Include semantics are documented in `format-reference.md`.
+- Recursive inclusion is demonstrated by:
+  - `container-publish.pfcfg` includes `node-build.pfcfg`
+  - `node-build.pfcfg` includes `defaults.pfcfg`
+  - `defaults.pfcfg` includes toolchains and notifications
+
+Why this is the safest interpretation:
+- These file relationships are nested and must be traversed recursively.
+- A non-recursive include evaluator would miss the actual namespace structure used by the starter configs.
+
+What could go wrong with another interpretation:
+- Flat include expansion would lose template layering.
+- It would break values such as `$(toolchain.node.install_cmd)` and `$(toolchain.default.name)` that come from included files.
+
+---
+
+### 5) Merge assignments in encounter order; later assignments override earlier assignments
+Classification: FIXTURE-EVIDENCED
+
+Evidence:
+- The documents do not explicitly say “last assignment wins,” but the files clearly rely on it:
+  - `ci-shared.pfcfg` overrides base values
+  - `pipeline.pfcfg` overrides template defaults
+  - `overrides.pfcfg` modifies build settings after the base include
+
+Why this is the safest interpretation:
+- It is the only model consistent with the sample override chains.
+- The assignment order is the only determinism source available in the repo.
+
+What could go wrong with another interpretation:
+- If the evaluator used a “first assignment wins” or set-based merge, the overlays would be wrong.
+- Production semantics would differ under CI and non-CI conditions.
+
+---
+
+### 6) After the complete active include/assignment stream has been merged, resolve interpolation recursively
+Classification: DOCUMENTED
+
+Evidence:
+- The reference explicitly says: `$(section.key)` is the value of another key after includes/conditionals are merged: `format-reference.md`.
+- The starter configs rely on that pattern:
+  - `node-build.pfcfg`: `install_cmd = $(toolchain.node.install_cmd)`
+  - `pipeline.pfcfg`: `public_key_url = $(signing.key_id).keys.example.invalid`
+  - `interpolation-cascade.pfcfg`: chained `${...}` and `$(...)` references
+
+Why this is the safest interpretation:
+- It matches the explicit wording in the reference.
+- It gives a clean two-phase model: merge first, resolve second.
+
+What could go wrong with another interpretation:
+- Resolving references while the stream is still being parsed would create order-sensitive, non-local behavior and could break the documented “after merge” rule.
+- It would be much easier to get wrong in nested include graphs.
+
+---
+
+### 7) Allow forward references because the starter fixtures require references to values that may be defined later in the merged configuration
+Classification: FIXTURE-EVIDENCED
+
+Evidence:
+- The reference does not explicitly say that forward references are allowed. It only says references happen after merge.
+- The fixture examples do not show a true later-key reference in the sense of a value defined after the referent in the same file; they do show complex chained interpolation and reference to merged data, but not a definitive “later in file” case:
+  - `interpolation-cascade.pfcfg`
+  - `pipeline.pfcfg`
+
+Why this is the safest interpretation:
+- A strict single-pass resolver would be brittle and would fail if a future config introduces a valid forward reference.
+- The docs explicitly call out circular references and say the parser enforces a maximum expansion pass. That strongly implies an iterative or fixpoint-style resolver is acceptable, and a forward-capable evaluator is safer than a parser that assumes “already defined only.”
+
+What could go wrong with another interpretation:
+- If we ban forward references outright, we risk a false negative on valid production configs.
+- If we accept forward references without cycle detection, we risk silent partial resolutions or infinite loops.
+
+Important nuance:
+- The repository does not prove a required later reference exists in the starter files. It only supports a conservative design that allows them.
+
+---
+
+### 8) Detect circular config references and fail rather than partially resolving them
+Classification: DOCUMENTED
+
+Evidence:
+- The reference says: “Circular `$(section.key)` references — behavior is error, not infinite loop.” `format-reference.md`
+- The starter file `interpolation-cascade.pfcfg` contains the explicit cycle:
+  - `a = $(cascade.loop.b)`
+  - `b = $(cascade.loop.a)`
+
+Why this is the safest interpretation:
+- It matches the explicit rule in the reference and the explicit edge-case fixture.
+- Failure is safer than partial resolution, and the assignment specifically warns about silent failures.
+
+What could go wrong with another interpretation:
+- A loop would hang or a partial value would be emitted, which is exactly the kind of silent break Jordan warns about.
+- A partial resolution would make the config appear valid while the pipeline sees the wrong value.
+
+---
+
+### 9) Apply a finite expansion limit to protect against pathological input
+Classification: DOCUMENTED
+
+Evidence:
+- The reference explicitly says the production parser enforces a maximum expansion pass limit, but the exact limit is not documented. `format-reference.md`
+
+Why this is the safest interpretation:
+- Because the repo explicitly requires a limit and a failure mode for pathological inputs.
+- This is a preventive guard, not a speculative optimization.
+
+What could go wrong with another interpretation:
+- Without a hard cap, a malicious or accidental self-referential chain could create non-terminating evaluation.
+- Too low a cap would falsely reject legitimate but deep chains; too high a cap could permit runaway work.
+
+---
+
+### 10) Define effective settings as the final resolved section/key/value map under the concrete environment
+Classification: DOCUMENTED
+
+Evidence:
+- The platform brief explicitly defines “Effective settings” as the resolved configuration after includes, conditionals, and interpolation are resolved: `platform-lead-brief.md`
+- The assignment says the verifier must compare old and new configs in terms of “effective settings”: `assignment.md`
+
+Why this is the safest interpretation:
+- It is exactly the business requirement: prove runtime-relevant settings, not text or raw parse tree structure.
+- It matches the assignment’s “silent failure” risk.
+
+What could go wrong with another interpretation:
+- A verifier comparing raw source text would miss real behavior changes in env-sensitive pipelines.
+- A verifier comparing the schema tree before resolution would pass even when runtime behavior differs.
+
+---
+
+## A. Does the evidence support post-merge interpolation?
+Yes. The strongest evidence is explicit in `format-reference.md`: `$(section.key)` resolves “after includes/conditionals are merged.” The starter files also show merged config trees before the references are consumed.
+
+This is not just a convenience choice; it is the documented model.
+
+---
+
+## B. Does the evidence require forward references?
+Not strictly in the starter files. The repo does not contain a confirmed example of a key that legitimately depends on a value defined later in the same merged tree. What it does support is a conservative evaluation rule: allow forward references, because:
+- the docs describe a resolver that can handle merged key references,
+- the resolver must be iterative or fixpoint-like,
+- and the real parser is said to enforce a pass limit, which implies a more general expansion model than a one-pass parse.
+
+So the safest answer is:
+- no, the starter files do not require forward references,
+- yes, the safe implementation should allow them rather than hard-code a brittle single-pass restriction.
+
+---
+
+## C. Should an explicitly empty environment variable be treated as empty/non-set for @ifdef, @ifndef, :- and :+?
+Yes.
+
+Evidence:
+- `format-reference.md` says:
+  - `@ifdef VAR` only if set and non-empty
+  - `@ifndef VAR` only if unset or empty
+  - `${VAR:-default}` uses default if unset or empty
+  - `${VAR:+alternate}` uses alternate only if set and non-empty
+- The same semantics are used in examples like `@ifndef SLACK_WEBHOOK` and `key_prefix = ${CI:+ci-}${CACHE_NAMESPACE:-default}` in `defaults.pfcfg`.
+
+This is the most consistent rule:
+- empty string is treated as empty, not as active data
+- unset and empty are equivalent for the default/conditional checks, except that “set and non-empty” is the positive case
+
+This is not a guess; it is the explicit rule in the reference.
+
+---
+
+## D. Should missing required environment variables be represented as evaluation errors rather than conversion failures?
+Yes, for the evaluator and for the verifier.
+
+Reason:
+- A required variable without a default is a legitimate environmental evaluation condition, not a conversion problem.
+- Examples:
+  - `secrets.pfcfg`: `key_material = ${REQUIRED_SIGNING_SECRET}`
+  - `conditional-includes.pfcfg`: `api_endpoint = ${REQUIRED_API_ENDPOINT}`
+- These are not parser failures; they are evaluation failures under a particular environment.
+
+But there is also a second layer:
+- if the converter or schema cannot represent that legacy behavior safely, it should also be reported as unmigratable.
+- The report is for things that cannot be auto-migrated or verified, while the evaluator should classify the specific missing env as an evaluation failure.
+
+---
+
+## E. Should missing config references be evaluation errors?
+Yes.
+
+Evidence:
+- The reference explicitly treats circular config references as errors.
+- A missing config reference is a broken reference, not a valid empty value.
+- The consistent safety rule is: if the reference target is missing, the evaluator fails with a precise reason rather than silently substitutes an empty string or partial value.
+
+This is important because silent empty substitution would create false equivalence.
+
+---
+
+## F. Should include cycles be errors?
+Yes, they should be errors.
+
+Evidence:
+- The reference never says include cycles are legal.
+- It explicitly warns about silent failure and makes circular config references errors.
+- For safety, the same principle should apply to include loops to avoid infinite recursion and partial partial merges.
+
+This is a necessary design decision and should be treated as fatal during parser/evaluator execution.
+
+---
+
+## G. What should @include_once use as its identity: the resolved file path relative to the repository/filesystem?
+Use the resolved canonical filesystem path, not the raw textual include string.
+
+This is the safest rule because:
+- “exact path” in the reference implies identity by the file being loaded, not by a textual alias.
+- Files may be reached through different relative paths that resolve to the same final file.
+- A raw string comparison would make `@include_once` inconsistent in nested trees.
+
+Recommended rule:
+- normalize each include to a canonical absolute or normalized path before checking the seen set
+- maintain the seen set per top-level entry
+- do not just compare raw relative strings
+
+This is a design decision, but it is the safest and least surprising interpretation.
+
+---
+
+## H. What expansion limit would you recommend for this take-home and why?
+Recommend: 64 expansion passes.
+
+Why:
+- The reference says the production parser imposes a cap, but the precise number is undocumented.
+- The sample fixtures are shallow and do not require anything near a massive limit.
+- A limit that is too low risks false negatives on legitimate but somewhat nested chains.
+- A limit that is too high risks expensive or non-terminating evaluation.
+
+64 is a good compromise:
+- large enough for realistic nested chains in a take-home repo,
+- small enough to prevent pathological runaway expansion,
+- easy to explain and document in DECISIONS.md
+
+---
+
+## SEMANTICS WE ARE NOW LOCKING
+
+These are the exact rules we should lock before designing the JSON schema:
+
+1. The evaluator starts from an empty configuration state for each entry file.
+2. The entry file is processed as an ordered stream.
+3. `@ifdef` and `@ifndef` are evaluated using the concrete environment while the stream is processed.
+4. Active `@include` and `@include_once` directives are processed recursively at their stream position.
+5. `@include_once` tracks already-included files by canonical resolved path, per top-level entry config.
+6. Included files merge into the current config tree in encounter order.
+7. Later assignments override earlier assignments in the same section/key path.
+8. After the active include and assignment stream is merged, interpolation is resolved against the merged tree.
+9. Interpolation supports:
+   - `${VAR}`
+   - `${VAR:-default}`
+   - `${VAR:+alternate}`
+   - `$(section.key)` and dot-separated paths
+10. References may be resolved after merge and may be iterative/fixpoint-based; forward references are allowed conservatively.
+11. Circular `$(section.key)` references are errors.
+12. Include cycles are errors.
+13. Missing required environment variables are evaluation errors for the concrete environment.
+14. Missing config references are evaluation errors.
+15. Expansion depth is bounded by a finite pass limit, recommended to be 64.
+16. Effective settings are the final resolved section/key/value map under the concrete environment after merge, conditional filtering, and interpolation.
+17. Unmigratable cases are those that cannot be represented or verified automatically and must be reported with file, section, key, and reason.
+
+This is the full set of semantics we can defend from the repo without inventing undocumented behavior.
