@@ -1054,3 +1054,215 @@ The evaluator should be an ordered replay:
 That is the semantic model I would implement next, and it is directly grounded in the supplied reference and starter fixtures.
 
 If you want, I can next turn this into a concrete evaluator design document for the repo, still without coding, or I can begin the actual evaluator implementation in the solution tree.
+
+
+## User Prompt
+
+We are implementing the PipelineForge "Say It in JSON" take-home assignment.
+
+Current state:
+- pipelineforge_json/legacy/parser.py is implemented.
+- 12 existing pytest tests pass.
+- convert/, json_evaluator/, schema/, verify/ are currently empty.
+- Do not modify parser.py unless a concrete requirement proves it is necessary.
+
+Implement ONLY the legacy reference evaluator now.
+
+Create:
+pipelineforge_json/legacy/evaluator.py
+
+API:
+evaluate_file(path: str | Path, env: Mapping[str, str] | None = None) -> dict[str, dict[str, object]]
+
+Required semantics from briefs/format-reference.md:
+1. @include paths are relative to the including file.
+2. @include always loads.
+3. @include_once loads a resolved file only once per top-level evaluation.
+4. @ifdef VAR executes when VAR is set and non-empty.
+5. @ifndef VAR executes when VAR is unset or empty.
+6. Nested conditionals work.
+7. Assignments execute in evaluation order; later assignments override earlier ones.
+8. ${VAR} -> env value or "".
+9. ${VAR:-default} -> env value when non-empty, otherwise default.
+10. ${VAR:+alternate} -> alternate when env value is non-empty, otherwise "".
+11. $(section.key) -> effective value of another key.
+12. Multiple reference-expansion passes are allowed.
+13. Circular references must raise a clear error.
+14. Use an explicit reasonable expansion limit (10 is acceptable).
+15. Keep values as strings unless the starter fixtures clearly require otherwise.
+
+Before coding:
+- Inspect parser.py.
+- Inspect briefs/format-reference.md.
+- Inspect starter/configs fixtures and determine any ambiguous behavior from them.
+
+Add focused tests for:
+- include
+- include_once
+- ifdef/ifndef
+- environment interpolation
+- cross-key references
+- duplicate override order
+- circular references
+- expansion limit
+
+Do NOT implement converter, JSON evaluator, schema, verifier, or reporting yet.
+
+Run all tests when finished.
+
+At the end, report:
+- files changed
+- important implementation decisions
+- pytest result
+
+## Copilot Response
+
+I’m reviewing the parser and the assignment reference first so the evaluator matches the required semantics before I add the targeted tests and implementation.
+
+Read , lines 1 to 260
+
+Read 
+
+Read 
+
+Searched for regex `@include|@ifdef|\$\{|\$\(` (`**/starter/configs/**`), 79 results
+
+Read , lines 260 to 270
+
+Read 
+
+The format reference confirms the semantics, and I’m checking the starter fixture patterns now to mirror the real config behavior before I lock in the evaluator and tests.
+
+Read 
+
+Read 
+
+Read 
+
+Read 
+
+Searched for regex `evaluate_file|legacy evaluator|ReferenceEvaluator|@include_once|circular.*reference|expansion limit` (`**/*.{md,py}`), 9 results
+
+Read 
+
+Read 
+
+Read 
+
+Read 
+
+Read 
+
+Read 
+
+I’ve narrowed the behavior to a small evaluator API and am adding the failing regression tests for include/conditional/interpolation behavior before implementing the evaluator itself.
+
+Created 
+
+Ran terminal command:  cd /Users/sanket/Documents/GitHub/ti-assignment-say-it-in-json/submissions/madhurrra-ma/say-it-in-json/solution && pytest -q tests/test_legacy_evaluator.py
+Completed with input:  cd /Users/sanket/Documents/GitHub/ti-assignment-say-it-in-json/submissions/madhurrra-ma/say-it-in-json/solution && pytest -q tests/test_legacy_evaluator.py
+
+Read 
+
+Read 
+
+Read 
+
+Read 
+
+Read 
+
+Ran terminal command:  cd /Users/sanket/Documents/GitHub/ti-assignment-say-it-in-json/submissions/madhurrra-ma/say-it-in-json/solution && pytest -q tests/test_legacy_evaluator.py
+Completed with input:  cd /Users/sanket/Documents/GitHub/ti-assignment-say-it-in-json/submissions/madhurrra-ma/say-it-in-json/solution && pytest -q tests/test_legacy_evaluator.py
+
+Ran terminal command:  pwd && ls && printf '\n---\n' && find .. -maxdepth 4 -type d -name solution | head
+
+Created 
+
+Ran terminal command:  cd /c/Users/Sanket/Documents/GitHub/ti-assignment-say-it-in-json/submissions/madhurrra-ma/say-it-in-json/solution && pytest -q tests/test_legacy_evaluator.py
+Completed with input:  cd /c/Users/Sanket/Documents/GitHub/ti-assignment-say-it-in-json/submissions/madhurrra-ma/say-it-in-json/solution && pytest -q tests/test_legacy_evaluator.py
+
+The project has the right files but the Python environment needs one quick check before validating the tests, so I’m switching to the repository’s interpreter path and tightening the evaluator against the actual failing edge cases.
+
+Ran terminal command:  cd /c/Users/Sanket/Documents/GitHub/ti-assignment-say-it-in-json/submissions/madhurrra-ma/say-it-in-json/solution && ls -la && printf '\n---\n' && python -V && printf '\n---\n' && python -m pytest -q tests/test_legacy_evaluator.py
+Completed with input:  cd /c/Users/Sanket/Documents/GitHub/ti-assignment-say-it-in-json/submissions/madhurrra-ma/say-it-in-json/solution && ls -la && printf '\n---\n' && python -V && printf '\n---\n' && python -m pytest -q tests/test_legacy_evaluator.py
+
+Ran terminal command:  cd /c/Users/Sanket/Documents/GitHub/ti-assignment-say-it-in-json/submissions/madhurrra-ma/say-it-in-json/solution && ./.venv/Scripts/python -m pytest -q tests/test_legacy_evaluator.py
+Completed with input:  cd /c/Users/Sanket/Documents/GitHub/ti-assignment-say-it-in-json/submissions/madhurrra-ma/say-it-in-json/solution && ./.venv/Scripts/python -m pytest -q tests/test_legacy_evaluator.py
+
+Replacing 212 lines with 214 lines in , 
+
+
+```
+
+```
+
+```
+
+```
+
+
+Ran terminal command:  cd /c/Users/Sanket/Documents/GitHub/ti-assignment-say-it-in-json/submissions/madhurrra-ma/say-it-in-json/solution && ./.venv/Scripts/python -m pytest -q tests/test_legacy_evaluator.py
+Completed with input:  cd /c/Users/Sanket/Documents/GitHub/ti-assignment-say-it-in-json/submissions/madhurrra-ma/say-it-in-json/solution && ./.venv/Scripts/python -m pytest -q tests/test_legacy_evaluator.py
+
+Replacing 101 lines with 94 lines in 
+
+
+```
+
+```
+
+
+Read 
+
+Ran terminal command:  cd /c/Users/Sanket/Documents/GitHub/ti-assignment-say-it-in-json/submissions/madhurrra-ma/say-it-in-json/solution && ./.venv/Scripts/python - <<'PY'
+from pipelineforge_json.legacy.evaluator import evaluate_file
+from pathlib import Path
+import tempfile
+
+with tempfile.TemporaryDirectory() as d:
+    p = Path(d)/'main.pfcfg'
+    p.write_text('[build]\nbase = release-v1\ntag = prefix-$(build.base)-suffix\nnested = ${ENV_TAG:-$(build.tag)}\n', encoding='utf-8')
+    print(evaluate_file(p))
+PY
+
+Ran terminal command:  cd /c/Users/Sanket/Documents/GitHub/ti-assignment-say-it-in-json/submissions/madhurrra-ma/say-it-in-json/solution && ./.venv/Scripts/python -m pytest -q
+
+## ✅ Legacy reference evaluator implemented
+
+I left `parser.py` unchanged and implemented the required evaluator behavior in `evaluator.py`, exported via `__init__.py`, and added focused regression tests in `test_legacy_evaluator.py`.
+
+### Files changed
+- `evaluator.py`
+- `__init__.py`
+- `test_legacy_evaluator.py`
+
+### Important implementation decisions
+- Include semantics:
+  - `@include` and `@include_once` are resolved relative to the including file’s directory.
+  - `@include_once` is tracked per top-level evaluation to avoid reloading the same resolved file.
+- Conditional semantics:
+  - `@ifdef VAR` runs only when the env value is set and non-empty.
+  - `@ifndef VAR` runs when the env value is unset or empty.
+  - Nested blocks evaluate recursively in order.
+- Assignment semantics:
+  - assignments are applied in source order; later assignments overwrite earlier ones.
+  - values remain strings unless a later stage explicitly changes them, which matches the starter fixtures and the requirement.
+- Interpolation:
+  - `${VAR}`, `${VAR:-default}`, `${VAR:+alternate}` are resolved with environment values.
+  - `$(section.key)` resolves against the effective merged config.
+  - multiple replacement passes are allowed during expansion.
+- Safety:
+  - circular `$(...)` chains raise a clear `ValueError`.
+  - an explicit expansion cap of 10 is enforced to prevent runaway expansion.
+
+### Pytest result
+I ran:
+
+`cd /c/Users/Sanket/Documents/GitHub/ti-assignment-say-it-in-json/submissions/madhurrra-ma/say-it-in-json/solution && ./.venv/Scripts/python -m pytest -q`
+
+Result:
+
+`20 passed in 0.23s`
+
+Made changes.
