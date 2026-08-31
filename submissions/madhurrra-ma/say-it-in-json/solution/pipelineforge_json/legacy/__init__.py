@@ -1,5 +1,6 @@
-"""Legacy .pfcfg parser components."""
+"""Legacy .pfcfg parser and evaluator components."""
 
+from .evaluator import evaluate_file
 from .parser import (
     Assignment,
     BlankLine,
@@ -24,6 +25,7 @@ __all__ = [
     "Program",
     "SectionDecl",
     "SourceLocation",
+    "evaluate_file",
     "parse_file",
     "parse_text",
 ]

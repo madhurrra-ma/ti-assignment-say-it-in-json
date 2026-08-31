@@ -1,0 +1,226 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pipelineforge.example.invalid/schemas/legacy-config.schema.json",
+  "title": "PipelineForge legacy .pfcfg JSON representation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "source", "statements", "sections", "includes", "conditionals", "unmigratable"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": { "type": "string" },
+        "resolved_path": { "type": ["string", "null"] }
+      }
+    },
+    "statements": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/statement" }
+    },
+    "sections": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/section"
+      }
+    },
+    "includes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/include" }
+    },
+    "conditionals": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/conditional" }
+    },
+    "unmigratable": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/unmigratable" }
+    }
+  },
+  "$defs": {
+    "section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "assignments"],
+      "properties": {
+        "name": { "type": "string" },
+        "assignments": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/assignment" }
+        }
+      }
+    },
+    "assignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "value", "source"],
+      "properties": {
+        "key": { "type": "string" },
+        "value": { "type": "string" },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["file", "line"],
+          "properties": {
+            "file": { "type": "string" },
+            "line": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "interpolation": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/interpolation_token" }
+        },
+        "references": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/reference" }
+        },
+        "effective_value": { "type": ["string", "null"] }
+      }
+    },
+    "include": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "path", "source"],
+      "properties": {
+        "kind": { "enum": ["include", "include_once"] },
+        "path": { "type": "string" },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["file", "line"],
+          "properties": {
+            "file": { "type": "string" },
+            "line": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "resolved_path": { "type": ["string", "null"] }
+      }
+    },
+    "conditional": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "kind", "var", "body", "source"],
+      "properties": {
+        "type": { "const": "conditional" },
+        "kind": { "enum": ["ifdef", "ifndef"] },
+        "var": { "type": "string" },
+        "body": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/statement" }
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["file", "line"],
+          "properties": {
+            "file": { "type": "string" },
+            "line": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    },
+    "statement": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "name"],
+          "properties": {
+            "type": { "const": "section" },
+            "name": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "section", "key", "value", "source"],
+          "properties": {
+            "type": { "const": "assignment" },
+            "section": { "type": "string" },
+            "key": { "type": "string" },
+            "value": { "type": "string" },
+            "source": { "$ref": "#/$defs/source_location" },
+            "interpolation": { "type": "array", "items": { "$ref": "#/$defs/interpolation_token" } },
+            "references": { "type": "array", "items": { "$ref": "#/$defs/reference" } }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "kind", "path", "source"],
+          "properties": {
+            "type": { "const": "include" },
+            "kind": { "enum": ["include", "include_once"] },
+            "path": { "type": "string" },
+            "source": { "$ref": "#/$defs/source_location" },
+            "resolved_path": { "type": ["string", "null"] }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "kind", "var", "body", "source"],
+          "properties": {
+            "type": { "const": "conditional" },
+            "kind": { "enum": ["ifdef", "ifndef"] },
+            "var": { "type": "string" },
+            "body": { "type": "array", "items": { "$ref": "#/$defs/statement" } },
+            "source": { "$ref": "#/$defs/source_location" }
+          }
+        }
+      ]
+    },
+    "source_location": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "line"],
+      "properties": {
+        "file": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "interpolation_token": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "raw", "start", "end"],
+      "properties": {
+        "kind": { "enum": ["env", "ref"] },
+        "raw": { "type": "string" },
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 0 },
+        "name": { "type": ["string", "null"] },
+        "variable": { "type": ["string", "null"] },
+        "default": { "type": ["string", "null"] },
+        "alternate": { "type": ["string", "null"] },
+        "section": { "type": ["string", "null"] },
+        "key": { "type": ["string", "null"] }
+      }
+    },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["section", "key"],
+      "properties": {
+        "section": { "type": "string" },
+        "key": { "type": "string" }
+      }
+    },
+    "unmigratable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "section", "key", "reason"],
+      "properties": {
+        "file": { "type": "string" },
+        "section": { "type": ["string", "null"] },
+        "key": { "type": ["string", "null"] },
+        "reason": { "type": "string" },
+        "line": { "type": ["integer", "null"], "minimum": 1 }
+      }
+    }
+  }
+}
